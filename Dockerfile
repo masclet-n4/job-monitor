@@ -1,5 +1,5 @@
 FROM node:20-alpine AS builder
-WORKDIR /app
+WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
@@ -10,6 +10,6 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --production
 COPY backend/server.js ./
-COPY --from=builder /app/dist ./public
+COPY --from=builder /app/frontend/dist ./public
 EXPOSE 3000
 CMD ["node", "server.js"]
