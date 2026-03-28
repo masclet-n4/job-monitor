@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  job-monitor:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - POCKETBASE_URL=http://pocketbase:8090
+      - POCKETBASE_EMAIL=admin@email.com
+      - POCKETBASE_PASSWORD=54321321Qq.1
+    networks:
+      - pb-net
+networks:
+  pb-net:
+    external: true
+    name: pb-net
