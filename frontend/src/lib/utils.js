@@ -6,7 +6,7 @@ export function cn(...inputs) {
 }
 
 export function formatDuration(seconds) {
-  if (!seconds) return '-'
+  if (!Number.isFinite(seconds) || seconds < 0) return '-'
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)

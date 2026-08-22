@@ -11,13 +11,32 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import ErrorModal from "./ErrorModal"
 import { formatDuration, formatDate } from "@/lib/utils"
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Code, CheckCircle, Loader2 } from "lucide-react"
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Code, CheckCircle, Loader2, Clock3, Package, Gauge } from "lucide-react"
 
 const statusConfig = {
   completed: { variant: "success", label: "Completado" },
+  completed_with_errors: { variant: "warning", label: "Completado con errores" },
   failed: { variant: "destructive", label: "Fallido" },
   running: { variant: "warning", label: "Ejecutando" },
-  pending: { variant: "secondary", label: "Pendiente" },
+  cancelled: { variant: "secondary", label: "Cancelado" },
+}
+
+const metricLabels = {
+  products_total: "Productos totales",
+  products_processed: "Productos procesados",
+  products_saved: "Productos guardados",
+  products_failed: "Productos fallidos",
+  prices_loaded: "Precios cargados",
+  worker_count: "Workers",
+  throughput_items_per_second: "Elementos/segundo",
+  supermarket_id: "Supermercado",
+}
+
+function formatMetric(key, value) {
+  if (typeof value === "number") {
+    return key.includes("throughput") ? value.toLocaleString("es-ES", { maximumFractionDigits: 2 }) : value.toLocaleString("es-ES")
+  }
+  return String(value)
 }
 
 export default function JobTable({ jobs, isLoading, currentPage, totalPages, totalItems, onPageChange }) {
@@ -75,6 +94,63 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
     )
   }
 
+  const getDuration = (job) => {
+    if (typeof job.details?.duration_ms === "number") return formatDuration(job.details.duration_ms / 1000)
+    if (job.start_date && job.end_date) return formatDuration((new Date(job.end_date) - new Date(job.start_date)) / 1000)
+    return "En curso"
+  }
+
+  const getErrors = (job) => Array.isArray(job.errors)
+    ? job.errors.filter((error) => error?.code !== "job_completed")
+    : []
+  const getErrorCount = (job) => {
+    const errors = getErrors(job)
+    return errors.length || (Number.isInteger(job.details?.error_count) ? job.details.error_count : 0)
+  }
+
+  const JobSummary = ({ job }) => {
+    const errorCount = getErrorCount(job)
+    const metrics = job.details || {}
+    return (
+      <>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-100">{job.type || "Job sin tipo"}</p>
+            <p className="mt-1 text-xs text-slate-500">{job.start_date ? formatDate(job.start_date) : "Sin fecha"}</p>
+          </div>
+          <Badge variant={statusConfig[job.status]?.variant || "secondary"}>
+            {statusConfig[job.status]?.label || job.status || "Desconocido"}
+          </Badge>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-slate-300"><Clock3 className="h-4 w-4 text-slate-500" />{getDuration(job)}</div>
+          <div className={`flex items-center gap-2 ${errorCount ? "text-red-400" : "text-emerald-400"}`}>
+            {errorCount ? <AlertCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+            {errorCount} {errorCount === 1 ? "error" : "errores"}
+          </div>
+          {metrics.products_processed != null && <div className="flex items-center gap-2 text-slate-300"><Package className="h-4 w-4 text-slate-500" />{formatMetric("products_processed", metrics.products_processed)} procesados</div>}
+          {metrics.throughput_items_per_second != null && <div className="flex items-center gap-2 text-slate-300"><Gauge className="h-4 w-4 text-slate-500" />{formatMetric("throughput_items_per_second", metrics.throughput_items_per_second)}/s</div>}
+        </div>
+      </>
+    )
+  }
+
+  const JobDetails = ({ job }) => {
+    const errors = getErrors(job)
+    const errorCount = getErrorCount(job)
+    const metrics = Object.entries(job.details || {})
+    return (
+      <div className="mt-4 border-t border-slate-700 pt-4 text-sm">
+        <div className="grid gap-2 text-slate-400 sm:grid-cols-2">
+          <p><span className="text-slate-500">ID:</span> <span className="font-mono text-xs">{job.id}</span></p>
+          <p><span className="text-slate-500">Fin:</span> {job.end_date ? formatDate(job.end_date) : "En curso"}</p>
+        </div>
+        {metrics.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2">{metrics.map(([key, value]) => <div key={key} className="flex justify-between gap-3 rounded-lg bg-slate-950/50 px-3 py-2"><span className="text-slate-500">{metricLabels[key] || key.replace(/_/g, " ")}</span><span className="text-right text-slate-200">{formatMetric(key, value)}</span></div>)}</div>}
+        {errors.length > 0 && <div className="mt-4 space-y-2"><p className="font-medium text-red-300">Errores ({errorCount})</p>{errors.map((error, index) => <div key={index} className="rounded-lg border border-red-500/20 bg-red-500/5 p-3"><p className="text-slate-200">{error.message || "Error sin mensaje"}</p>{error.entity_id && <p className="mt-1 text-xs text-slate-500">Entidad: {error.entity_id}</p>}{error.stack_trace && <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-500">{error.stack_trace}</pre>}</div>)}</div>}
+      </div>
+    )
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -86,7 +162,10 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-700 bg-slate-900/50 overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {sortedJobs.length === 0 ? <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-8 text-center text-slate-500">No hay jobs para mostrar</div> : sortedJobs.map((job) => <article key={job.id} className="rounded-xl border border-slate-700 bg-slate-900/70 p-4"><button className="w-full text-left" onClick={() => toggleExpand(job.id)} aria-expanded={expandedJobId === job.id}><JobSummary job={job} /></button>{expandedJobId === job.id && <JobDetails job={job} />}</article>)}
+      </div>
+      <div className="hidden overflow-x-auto rounded-lg border border-slate-700 bg-slate-900/50 md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700 hover:bg-slate-800/50">
@@ -144,7 +223,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
                       {job.details?.duracion_segundos ? formatDuration(job.details.duracion_segundos) : '-'}
                     </TableCell>
                     <TableCell>
-                      {(job.details?.errores_count || 0) > 0 ? (
+                      {getErrorCount(job) > 0 ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -152,7 +231,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
                           onClick={() => openErrorModal(job)}
                         >
                           <AlertCircle className="h-4 w-4 mr-1" />
-                          {job.details.errores_count}
+                          {getErrorCount(job)}
                         </Button>
                       ) : (
                         <span className="flex items-center gap-1 text-emerald-500">
@@ -194,10 +273,10 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Página {currentPage} de {totalPages} • Total: {totalItems} jobs
+            <p className="text-sm text-slate-500">
+            Página {currentPage} de {totalPages} · {totalItems} jobs
           </p>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <Button
               variant="outline"
               size="sm"

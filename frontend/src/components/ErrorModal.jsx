@@ -12,8 +12,10 @@ import { ChevronDown, ChevronUp, AlertCircle } from "lucide-react"
 
 export default function ErrorModal({ errors, isOpen, onClose, jobId }) {
   const [expandedIndex, setExpandedIndex] = useState(null)
+  const visibleErrors = (Array.isArray(errors) ? errors : [])
+    .filter((error) => error?.code !== "job_completed")
 
-  if (!errors || errors.length === 0) return null
+  if (visibleErrors.length === 0) return null
 
   const toggleExpand = (index) => {
     setExpandedIndex(expandedIndex === index ? null : index)
@@ -21,19 +23,19 @@ export default function ErrorModal({ errors, isOpen, onClose, jobId }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col bg-slate-900 border-slate-700">
+      <DialogContent className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-3xl flex-col overflow-hidden border-slate-700 bg-slate-900">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-red-500" />
             Errores del Job
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Job ID: {jobId} • Total: {errors.length} errores
+            Job ID: {jobId} • Total: {visibleErrors.length} errores
           </DialogDescription>
         </DialogHeader>
         
         <div className="flex-1 overflow-y-auto space-y-3 mt-4 pr-2">
-          {errors.map((error, index) => (
+          {visibleErrors.map((error, index) => (
             <div
               key={index}
               className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/50"
@@ -57,11 +59,18 @@ export default function ErrorModal({ errors, isOpen, onClose, jobId }) {
                 )}
               </button>
               
-              {expandedIndex === index && error.stackTrace && (
+              {expandedIndex === index && (
                 <div className="px-3 pb-3">
-                  <pre className="mt-2 p-3 bg-slate-950 rounded-md text-xs text-slate-400 overflow-x-auto font-mono whitespace-pre-wrap">
-                    {error.stackTrace}
-                  </pre>
+                  <div className="mt-2 space-y-2 rounded-md bg-slate-950 p-3 text-xs">
+                    {Object.entries(error).map(([key, value]) => (
+                      <div key={key} className="flex gap-3">
+                        <span className="shrink-0 text-slate-500">{key}:</span>
+                        <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-slate-300">
+                          {typeof value === "string" ? value : JSON.stringify(value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

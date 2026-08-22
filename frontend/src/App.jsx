@@ -36,12 +36,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen p-6 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <header className="flex items-center gap-3 pb-4 border-b border-slate-700">
-          <Activity className="h-8 w-8 text-blue-500" />
+    <div className="min-h-screen px-4 py-5 sm:px-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-5 md:space-y-6">
+        <header className="flex items-center gap-3 border-b border-slate-700 pb-4">
+          <div className="rounded-xl bg-blue-500/10 p-2">
+            <Activity className="h-6 w-6 text-blue-400 md:h-8 md:w-8" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Job Monitor</h1>
+            <h1 className="text-xl font-bold text-white md:text-2xl">Job Monitor</h1>
             <p className="text-sm text-slate-400">Panel de monitoreo de jobs y scrapers</p>
           </div>
         </header>
