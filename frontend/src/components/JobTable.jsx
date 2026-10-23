@@ -12,14 +12,7 @@ import { Button } from "./ui/button"
 import ErrorModal from "./ErrorModal"
 import { formatDuration, formatDate } from "@/lib/utils"
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Code, CheckCircle, Loader2, Clock3, Package, Gauge } from "lucide-react"
-
-const statusConfig = {
-  completed: { variant: "success", label: "Completado" },
-  completed_with_errors: { variant: "warning", label: "Completado con errores" },
-  failed: { variant: "destructive", label: "Fallido" },
-  running: { variant: "warning", label: "Ejecutando" },
-  cancelled: { variant: "secondary", label: "Cancelado" },
-}
+import { getJobErrors, getJobErrorCount, statusConfig } from "@/lib/jobs"
 
 const metricLabels = {
   products_total: "Productos totales",
@@ -37,6 +30,35 @@ function formatMetric(key, value) {
     return key.includes("throughput") ? value.toLocaleString("es-ES", { maximumFractionDigits: 2 }) : value.toLocaleString("es-ES")
   }
   return String(value)
+}
+
+function OpenRouterUsage({ usage }) {
+  if (!usage || typeof usage !== "object") return null
+
+  const cost = Number.isFinite(usage.cost)
+    ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "USD", maximumFractionDigits: 8 }).format(usage.cost)
+    : "—"
+  const tokens = (value) => Number.isFinite(value) ? value.toLocaleString("es-ES") : "—"
+  const metrics = [
+    ["Coste", cost],
+    ["Tokens de entrada", tokens(usage.prompt_tokens)],
+    ["Tokens de salida", tokens(usage.completion_tokens)],
+    ["Total de tokens", tokens(usage.total_tokens)],
+  ]
+
+  return (
+    <section className="mt-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+      <h3 className="mb-2 font-medium text-blue-200">Consumo de OpenRouter</h3>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {metrics.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-3 text-sm">
+            <span className="text-slate-400">{label}</span>
+            <span className="text-slate-100">{value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 export default function JobTable({ jobs, isLoading, currentPage, totalPages, totalItems, onPageChange }) {
@@ -72,7 +94,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
   const openErrorModal = (job) => {
     setSelectedJobErrors({
       isOpen: true,
-      errors: job.errors || [],
+      errors: getJobErrors(job),
       jobId: job.id
     })
   }
@@ -100,16 +122,8 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
     return "En curso"
   }
 
-  const getErrors = (job) => Array.isArray(job.errors)
-    ? job.errors.filter((error) => error?.code !== "job_completed")
-    : []
-  const getErrorCount = (job) => {
-    const errors = getErrors(job)
-    return errors.length || (Number.isInteger(job.details?.error_count) ? job.details.error_count : 0)
-  }
-
   const JobSummary = ({ job }) => {
-    const errorCount = getErrorCount(job)
+    const errorCount = getJobErrorCount(job)
     const metrics = job.details || {}
     return (
       <>
@@ -136,15 +150,16 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
   }
 
   const JobDetails = ({ job }) => {
-    const errors = getErrors(job)
-    const errorCount = getErrorCount(job)
-    const metrics = Object.entries(job.details || {})
+    const errors = getJobErrors(job)
+    const errorCount = getJobErrorCount(job)
+    const metrics = Object.entries(job.details || {}).filter(([key]) => key !== "openrouter_usage")
     return (
       <div className="mt-4 border-t border-slate-700 pt-4 text-sm">
         <div className="grid gap-2 text-slate-400 sm:grid-cols-2">
           <p><span className="text-slate-500">ID:</span> <span className="font-mono text-xs">{job.id}</span></p>
           <p><span className="text-slate-500">Fin:</span> {job.end_date ? formatDate(job.end_date) : "En curso"}</p>
         </div>
+        <OpenRouterUsage usage={job.details?.openrouter_usage} />
         {metrics.length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2">{metrics.map(([key, value]) => <div key={key} className="flex justify-between gap-3 rounded-lg bg-slate-950/50 px-3 py-2"><span className="text-slate-500">{metricLabels[key] || key.replace(/_/g, " ")}</span><span className="text-right text-slate-200">{formatMetric(key, value)}</span></div>)}</div>}
         {errors.length > 0 && <div className="mt-4 space-y-2"><p className="font-medium text-red-300">Errores ({errorCount})</p>{errors.map((error, index) => <div key={index} className="rounded-lg border border-red-500/20 bg-red-500/5 p-3"><p className="text-slate-200">{error.message || "Error sin mensaje"}</p>{error.entity_id && <p className="mt-1 text-xs text-slate-500">Entidad: {error.entity_id}</p>}{error.stack_trace && <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-500">{error.stack_trace}</pre>}</div>)}</div>}
       </div>
@@ -223,7 +238,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
                       {job.details?.duracion_segundos ? formatDuration(job.details.duracion_segundos) : '-'}
                     </TableCell>
                     <TableCell>
-                      {getErrorCount(job) > 0 ? (
+                      {getJobErrorCount(job) > 0 ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -231,7 +246,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
                           onClick={() => openErrorModal(job)}
                         >
                           <AlertCircle className="h-4 w-4 mr-1" />
-                          {getErrorCount(job)}
+                          {getJobErrorCount(job)}
                         </Button>
                       ) : (
                         <span className="flex items-center gap-1 text-emerald-500">
@@ -256,6 +271,7 @@ export default function JobTable({ jobs, isLoading, currentPage, totalPages, tot
                     <TableRow key={`${job.id}-details`} className="bg-slate-800/30">
                       <TableCell colSpan={8} className="p-0">
                         <div className="p-4 border-t border-slate-700">
+                          <OpenRouterUsage usage={job.details?.openrouter_usage} />
                           <p className="text-xs text-slate-500 mb-2 font-mono">details:</p>
                           <pre className="bg-slate-950 rounded-md p-4 text-xs text-slate-300 overflow-x-auto font-mono max-h-[300px]">
                             {JSON.stringify(job.details, null, 2)}

@@ -7,7 +7,6 @@ import {
   DialogDescription,
 } from "./ui/dialog"
 import { Badge } from "./ui/badge"
-import { Button } from "./ui/button"
 import { ChevronDown, ChevronUp, AlertCircle } from "lucide-react"
 
 export default function ErrorModal({ errors, isOpen, onClose, jobId }) {
@@ -49,7 +48,7 @@ export default function ErrorModal({ errors, isOpen, onClose, jobId }) {
                     #{index + 1}
                   </Badge>
                   <span className="text-sm text-slate-200 truncate">
-                    {error.message}
+                    {error.message || "Error sin mensaje"}
                   </span>
                 </div>
                 {expandedIndex === index ? (
